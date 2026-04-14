@@ -6,12 +6,12 @@
 #include <zboss_api.h>
 #include <zboss_api_addons.h>
 #include <zb_zcl_reporting.h>
-//#include <zephyr/drivers/led.h>
+// #include <zephyr/drivers/led.h>
 #include <zigbee/zigbee_app_utils.h>
 #include <zigbee/zigbee_error_handler.h>
 #include <zb_nrf_platform.h>
-//#include <zboss_api_zcl.h>
-//#include <zcl/zb_zcl_poll_control.h>
+// #include <zboss_api_zcl.h>
+// #include <zcl/zb_zcl_poll_control.h>
 
 #include "zephyr_drivers.h"
 #include "zb_zcl_struct.h"
@@ -28,7 +28,6 @@ static void poll_control_checkin_cb(zb_uint8_t param);
 K_WORK_DEFINE(read_data_work, read_data_handler);
 K_WORK_DELAYABLE_DEFINE(deep_sleep_work, enter_deep_sleep_work_handler);
 struct k_timer read_data_timer;
-
 
 LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
 
@@ -78,6 +77,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 
 	ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
 
+	if (bufid)
 	{
 		zb_buf_free(bufid);
 	}
@@ -125,10 +125,6 @@ static int configure_gpio(void)
 	dk_buttons_init(button_handler);
 	return 0;
 }
-
-
-
-
 
 void button_handler(uint32_t button_state, uint32_t has_changed)
 {
@@ -202,7 +198,7 @@ static void read_data_handler(struct k_work *work)
 	{
 		battery_level = cr2032_CalculateLevel((uint16_t)(volt_cr));
 	}
-	volt_cr = volt_cr/100;
+	volt_cr = volt_cr / 100;
 	zb_zcl_set_attr_val(
 		ENDPOINT_NUM,
 		ZB_ZCL_CLUSTER_ID_POWER_CONFIG,
