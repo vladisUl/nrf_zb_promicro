@@ -1,185 +1,183 @@
-# Zigbee датчик температуры, влажности и давления на ProMicro nRF52840 + BME280
+# Zigbee Temperature, Humidity, and Pressure Sensor on ProMicro nRF52840 + BME280
 
-Проект Zigbee-устройства на базе популярной платы **ProMicro nRF52840** и датчика **BME280**.
+This project is a Zigbee device based on the popular **ProMicro nRF52840** board and the **BME280** sensor.
 
-Устройство предназначено для работы как автономный Zigbee-датчик и передаёт в сеть:
+The device is intended to operate as a standalone Zigbee sensor and reports the following values to the network:
 
-- температуру
-- влажность
-- давление
-- напряжение питания и условный уровень заряда батареи
+- temperature
+- humidity
+- pressure
+- supply voltage and estimated battery level
 
-Проект построен на **nRF Connect SDK**, **Zephyr** и **Zigbee R23**. Это подтверждается текущей реализацией драйверов, Zigbee-структур и приложения. 
+The project is built on **nRF Connect SDK**, **Zephyr**, and **Zigbee R23**.
 
 ---
 
-## Аппаратная платформа
+## Hardware Platform
 
-В качестве аппаратной платформы используется **ProMicro nRF52840**.
+The hardware platform used in this project is the **ProMicro nRF52840** board.
 
-Особенность этой платы — наличие встроенного **Bootloader**, который позволяет загружать прошивку без подключения отладчика SWD.
+One important feature of this board is its built-in **Bootloader**, which allows firmware to be uploaded without using an SWD debugger.
 
-### Вход в режим Bootloader
+### Entering Bootloader Mode
 
-Чтобы перевести плату в режим загрузчика, нужно:
+To enter bootloader mode:
 
-- дважды замкнуть **RST** на **GND** в течение **0.5 секунды**
-- после этого подключить плату к компьютеру по USB
-- в системе появится накопитель **Nice! Nano**
-- на этот накопитель нужно скопировать файл прошивки в формате **`.uf2`**
+- short **RST** to **GND** twice within **0.5 seconds**
+- then connect the board to the computer over USB
+- a storage device named **Nice! Nano** will appear
+- copy the firmware file in **`.uf2`** format to this drive
 
-### Схема платы
+### Board Schematic
 
 <a href="docs/scheme.jpg">
-  <img src="docs/scheme.jpg" alt="Схема платы ProMicro nRF52840" width="500">
+  <img src="docs/scheme.jpg" alt="ProMicro nRF52840 board schematic" width="500">
 </a>
 
 ---
 
-## Возможности проекта
+## Project Features
 
-### Работа с датчиком BME280
+### BME280 Sensor Support
 
-В проекте реализовано чтение данных с **BME280** через штатные драйверы **Zephyr**.  
-Считываются следующие параметры:
+The project reads data from the **BME280** using standard **Zephyr** drivers.  
+The following values are measured:
 
-- температура
-- влажность
-- давление
+- temperature
+- humidity
+- pressure
 
-Датчик инициализируется через Devicetree и используется через стандартную сенсорную подсистему Zephyr. Это видно в драйверной части проекта. :contentReference[oaicite:2]{index=2}
+The sensor is initialized through Devicetree and accessed through the standard Zephyr sensor subsystem.
 
-### Измерение напряжения питания
+### Supply Voltage Measurement
 
-Напряжение питания измеряется через **ADC**.  
-На основе измеренного значения рассчитывается условный уровень заряда батареи, который затем публикуется в Zigbee через **Power Configuration cluster**. Это реализовано в коде драйверов и основном приложении. 
+Supply voltage is measured using the **ADC**.  
+Based on the measured voltage, the firmware calculates an estimated battery level and publishes it through the Zigbee **Power Configuration cluster**.
 
-### Использование Poll Control cluster
+### Poll Control Cluster
 
-В проект добавлен **Poll Control cluster**.
+The project includes the **Poll Control cluster**.
 
-Он используется для пробуждения устройства кратковременным нажатием кнопки. Такой механизм удобен для параметрирования устройства после установки и включения в Zigbee-сеть. Обработка кнопки и ручной check-in реализованы в основном приложении. :contentReference[oaicite:4]{index=4}
+It is used to wake the device with a short button press. This is useful when the device needs to be configured after installation and after joining a Zigbee network.
 
-### Энергосбережение
+### Low Power Operation
 
-Проект рассчитан на работу от батареи и использует несколько механизмов снижения энергопотребления:
+The project is designed for battery-powered use and includes several power-saving mechanisms:
 
-- режим sleepy behavior Zigbee
-- перевод BME280 в состояние suspend между измерениями
-- отключение неиспользуемых блоков RAM
-- редкое пробуждение для передачи данных
-
-Эти механизмы присутствуют в коде проекта и используются при инициализации устройства и работе с датчиком. 
+- Zigbee sleepy behavior
+- placing the BME280 into suspend mode between measurements
+- powering down unused RAM blocks
+- infrequent wakeups for data transmission
 
 ---
 
-## Отладка в процессе разработки
+## Development and Debugging
 
-Во время разработки использовалась такая же плата, но с выведенными сигналами:
+During development, the same board was used, but with the following signals exposed:
 
 - SWD
 - SCL
 - GND
 - VDD
 
-Это позволяло выполнять:
+This allowed:
 
-- прямую загрузку прошивки
-- отладку
-- стирание загрузчика при необходимости
-- работу с журналом сообщений
-
----
-
-## Особенности сборки для загрузки через встроенный Bootloader
-
-Поскольку на плате используется встроенный загрузчик, итоговая прошивка должна собираться **не с адреса `0x0000`**, а со смещением, совместимым с Bootloader.
-
-В проекте это решается через **Partition Manager** и статическую карту памяти.
-
-Для такой сборки используется файл:
-
-`/pm_static/pm_static.yml`
-
-Его необходимо скопировать в корень проекта под именем:
-
-`pm_static.yml`
-
-Если этот файл отсутствует, приложение будет собрано с начала флеш-памяти. Такой вариант удобен для загрузки через SWD, но не подходит для записи через встроенный загрузчик платы.
+- direct firmware flashing
+- debugging
+- erasing the bootloader when needed
+- working with runtime logs
 
 ---
 
-## Подготовка сборки для загрузки через Bootloader
+## Build Details for the Built-In Bootloader
 
-Чтобы получить файл прошивки для записи через встроенный загрузчик, необходимо выполнить следующие шаги.
+Because this board uses a built-in bootloader, the final firmware must be built **not from address `0x0000`**, but from an offset compatible with the bootloader.
 
-### 1. Отключить журналирование
+In this project, that is handled through **Partition Manager** and a static memory layout.
 
-В файле `prj.conf` отключить или минимизировать вывод логов.
-
-### 2. Подложить статическую разметку памяти
-
-Скопировать файл:
+The following file is used for that purpose:
 
 `/pm_static/pm_static.yml`
 
-в корень проекта под именем:
+It must be copied to the project root under the name:
 
 `pm_static.yml`
 
-### 3. Создать отдельную Build Configuration
+If this file is not present, the application will be built from the beginning of flash memory. That is convenient for SWD flashing, but it is not suitable for uploading through the board’s built-in bootloader.
 
-Использовать следующие параметры:
+---
+
+## Preparing a Build for Bootloader Upload
+
+To generate a firmware file suitable for uploading through the built-in bootloader, follow these steps.
+
+### 1. Disable Logging
+
+In `prj.conf`, disable logging or reduce it to a minimum.
+
+### 2. Add the Static Memory Layout
+
+Copy the file:
+
+`/pm_static/pm_static.yml`
+
+to the project root as:
+
+`pm_static.yml`
+
+### 3. Create a Separate Build Configuration
+
+Use the following parameters:
 
 **Extra CMake arguments:** `-DGEN_UF2=ON`  
 **Build mode:** `no sysbuild`
 
-### 4. Собрать проект
+### 4. Build the Project
 
-После успешной сборки в каталоге
+After a successful build, the following file will be generated in:
 
 `build/zephyr/`
 
-будет создан файл:
+File:
 
 `zephyr.uf2`
 
 ---
 
-## Загрузка прошивки в плату
+## Uploading Firmware to the Board
 
-1. Дважды замкнуть **RST** на **GND** в течение **0.5 секунды**
-2. Подключить плату к компьютеру по USB
-3. Дождаться появления накопителя **Nice! Nano**
-4. Скопировать файл `zephyr.uf2` на этот накопитель
+1. Short **RST** to **GND** twice within **0.5 seconds**
+2. Connect the board to the computer over USB
+3. Wait until the **Nice! Nano** storage device appears
+4. Copy `zephyr.uf2` to that drive
 
-После завершения копирования плата перезагрузится и запустит новую прошивку.
-
----
-
-## Варианты использования при разработке
-
-### Сборка для отладки
-
-Используется при загрузке через SWD и отладке:
-
-- без `pm_static.yml` в корне проекта
-- приложение собирается для прямой записи во флеш-память
-- удобно для тестирования и отладки
-
-### Сборка для загрузки через встроенный Bootloader
-
-Используется для обычной эксплуатации платы без подключения SWD:
-
-- с `pm_static.yml` в корне проекта
-- с генерацией `uf2`
-- с загрузкой через встроенный Bootloader
+After the copy operation finishes, the board will reboot and start the new firmware.
 
 ---
 
-## Zigbee-функциональность
+## Typical Usage During Development
 
-Устройство использует Zigbee endpoint со следующими основными кластерами:
+### Debug Build
+
+Used for SWD flashing and debugging:
+
+- without `pm_static.yml` in the project root
+- the application is built for direct flashing into memory
+- convenient for testing and debugging
+
+### Build for the Built-In Bootloader
+
+Used for normal operation without SWD access:
+
+- with `pm_static.yml` in the project root
+- with `uf2` generation enabled
+- uploaded through the built-in bootloader
+
+---
+
+## Zigbee Functionality
+
+The device uses a Zigbee endpoint with the following main clusters:
 
 - Basic
 - Identify
@@ -189,22 +187,20 @@
 - Pressure Measurement
 - Poll Control
 
-Это соответствует текущему описанию кластеров и атрибутов в проекте. 
+---
+
+## Intended Use
+
+This project can be used as a base for:
+
+- a standalone Zigbee environmental sensor
+- a battery-powered Zigbee device
+- home automation projects
+- custom Zigbee devices based on nRF52840 and Zephyr
 
 ---
 
-## Назначение проекта
+## Note
 
-Проект можно использовать как основу для:
-
-- автономного Zigbee-датчика микроклимата
-- устройства на батарейном питании
-- домашней автоматизации
-- собственных Zigbee-устройств на базе nRF52840 и Zephyr
-
----
-
-## Примечание
-
-Проект ориентирован на плату **ProMicro nRF52840** со встроенным Bootloader.  
-При использовании другой платы, другого загрузчика или другой схемы записи прошивки карта памяти и параметры сборки могут отличаться.
+This project is specifically designed for the **ProMicro nRF52840** board with its built-in bootloader.  
+If you use a different board, a different bootloader, or a different flashing method, the memory layout and build settings may need to be adjusted.
