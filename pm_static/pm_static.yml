@@ -1,0 +1,27 @@
+# Файл: pm_static.yml
+# Назначение: Статическое распределение памяти для Zigbee R23
+
+# 1. Заглушка под пользовательский загрузчик
+# Резервирует начало флеша 0x0000..0x0FFF
+custom_bootloader_pad:
+  address: 0x0
+  size: 0x1000
+  region: flash_primary
+
+# 2. Пользовательские настройки Zephyr
+# Перенесены в верхнюю часть памяти, чтобы под app осталась одна сплошная область
+settings_storage:
+  address: 0xf3000
+  size: 0x4000
+  region: flash_primary
+
+# 3. Разделы ZBOSS
+zboss_nvram:
+  address: 0xf7000
+  size: 0x8000
+  region: flash_primary
+
+zboss_product_config:
+  address: 0xff000
+  size: 0x1000
+  region: flash_primary

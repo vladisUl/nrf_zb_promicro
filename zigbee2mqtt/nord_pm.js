@@ -1,7 +1,7 @@
 import * as m from 'zigbee-herdsman-converters/lib/modernExtend';
 
 export default {
-    zigbeeModel: ['nordic DIY'],
+    zigbeeModel: ['nordic DIY PM'],
     model: 'nordic DIY',
     vendor: 'Nordic',
     description: 'Nordic DIY sensor',
@@ -10,29 +10,36 @@ export default {
             reporting: {
                 min: 60,
                 max: 300,
-                change: 10,
+                change: 20,
             },
         }),
-	m.humidity({
+        m.humidity({
             reporting: {
-                min: 60,
+                min: 180,
                 max: 300,
-                change: 10,
+                change: 100,
             },
         }),
-	m.pressure({
+        m.pressure({
             reporting: {
-                min: 60,
+                min: 120,
                 max: 300,
-                change: 1,
+                change: 5,
             },
-	    unit: 'hPa',
+            unit: 'hPa',
         }),
         m.battery({
+            voltage: true,
+            voltageReporting: false,
+            voltageReportingConfig: {
+                min: 600,
+                max: 3600,
+                change: 1,
+            },
             percentageReportingConfig: {
                 min: 600,
                 max: 3600,
-                change: 2,
+                change: 1,
             },
         }),
     ],

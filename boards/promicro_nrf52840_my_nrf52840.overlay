@@ -14,14 +14,18 @@
     };
 };
 
-
 &i2c1 {
-	compatible = "nordic,nrf-twim";
+    compatible = "nordic,nrf-twim";
     status = "okay";
     clock-frequency = <I2C_BITRATE_STANDARD>;
     pinctrl-0 = <&i2c1_default>;
     pinctrl-1 = <&i2c1_sleep>;
     pinctrl-names = "default", "sleep";
+
+    bme280@76 {
+        compatible = "bosch,bme280";
+        reg = <0x76>;
+    };
 };
 
 &pinctrl {
@@ -29,6 +33,7 @@
         group1 {
             psels = <NRF_PSEL(TWIM_SDA, 1, 6)>,
                     <NRF_PSEL(TWIM_SCL, 1, 4)>;
+            bias-disable;
         };
     };
 
@@ -36,7 +41,22 @@
         group1 {
             psels = <NRF_PSEL(TWIM_SDA, 1, 6)>,
                     <NRF_PSEL(TWIM_SCL, 1, 4)>;
+            bias-disable;
             low-power-enable;
         };
+    };
+};
+
+&adc {
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    vdd_channel: channel@0 {
+        reg = <0>;
+        zephyr,gain = "ADC_GAIN_1_6";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,input-positive = <NRF_SAADC_VDD>;
     };
 };

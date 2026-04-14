@@ -4,11 +4,9 @@
 			"path": "../../../zigbee-r23"
 		},
 		{
-			"name": "nordic_diy",
+			"name": "nordic_diy_pm_poll",
 			"path": "."
 		}
 	],
-	"settings": {
-		"nrf-connect.applications": []
-	}
+	"settings": {}
 }

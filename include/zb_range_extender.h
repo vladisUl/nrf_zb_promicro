@@ -16,7 +16,7 @@
 	(ZB_NORDIC_DIY_IN_CLUSTER_NUM + ZB_NORDIC_DIY_OUT_CLUSTER_NUM)
 
 // Number of attributes for reporting
-#define ZB_NORDIC_DIY_REPORT_ATTR_COUNT 4 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#define ZB_NORDIC_DIY_REPORT_ATTR_COUNT 5
 
 #define ZB_DECLARE_NORDIC_DIY_CLUSTER_LIST(                                       \
 	cluster_list_name,                                                            \
