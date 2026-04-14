@@ -6,12 +6,9 @@
 #include <zboss_api.h>
 #include <zboss_api_addons.h>
 #include <zb_zcl_reporting.h>
-// #include <zephyr/drivers/led.h>
 #include <zigbee/zigbee_app_utils.h>
 #include <zigbee/zigbee_error_handler.h>
 #include <zb_nrf_platform.h>
-// #include <zboss_api_zcl.h>
-// #include <zcl/zb_zcl_poll_control.h>
 
 #include "zephyr_drivers.h"
 #include "zb_zcl_struct.h"
