@@ -91,6 +91,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	{
 		LOG_INF("left network!");
 		LED_BLINK(K_NO_WAIT, K_NO_WAIT);
+
 	}
 	lastJoin = thisJoin;
 }

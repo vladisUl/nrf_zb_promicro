@@ -3,7 +3,9 @@
 #include <zephyr/pm/device.h>
 
 const struct device *leds = DEVICE_DT_GET(DT_NODELABEL(leds));
-
+const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(SW0_NODE, gpios);
+const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
+struct k_timer led_timer;
 LOG_MODULE_REGISTER(zephyr_drivers, LOG_LEVEL_INF);
 
 const struct device *const dev_bme280 = DEVICE_DT_GET_ANY(bosch_bme280);

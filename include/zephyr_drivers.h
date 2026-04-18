@@ -10,12 +10,12 @@
 
 #define SW0_NODE DT_ALIAS(sw0)
 #define MY_BUTTON_MASK BIT(0)
-static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(SW0_NODE, gpios);
-
 #define LED0_NODE DT_ALIAS(led0)
 #define MY_LED_MASK BIT(0)
-static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
-static struct k_timer led_timer;
+
+extern const struct gpio_dt_spec button;
+extern const struct gpio_dt_spec led;
+extern struct k_timer led_timer;
 
 #define LED_BLINK(start_delay, period) \
     k_timer_start(&led_timer, start_delay, period)
