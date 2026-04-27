@@ -42,37 +42,105 @@ static void poll_control_checkin_cb(zb_uint8_t param)
 	zb_zcl_poll_control_stop();
 }
 
-void zboss_signal_handler(zb_bufid_t bufid)
+
+static volatile bool stop_after_fail = false;
+/*void zboss_signal_handler(zb_bufid_t bufid)
 {
 	static bool lastJoin = false;
-
 	zb_zdo_app_signal_hdr_t *sig_hndler = NULL;
 	zb_zdo_app_signal_type_t sig = zb_get_app_signal(bufid, &sig_hndler);
 	zb_ret_t status = ZB_GET_APP_SIGNAL_STATUS(bufid);
+	bool pass_to_default = true;
+	//LOG_INF("0allow_autojoin %d", allow_autojoin);
 
-	if (sig == ZB_BDB_SIGNAL_STEERING)
-	{
-		LOG_INF("Signal STEERING");
-
-		if (status == RET_OK)
-		{
-			LOG_INF("Device joined the network. Configuring reporting...");
-			k_work_reschedule(&deep_sleep_work, K_SECONDS(30));
-		}
-	}
+	// if (sig == ZB_BDB_SIGNAL_STEERING)
+	// {
+	// 	LOG_INF("Signal STEERING");
+	// 	LOG_INF("1allow_autojoin %d", allow_autojoin);
+	// 	if (status == RET_OK)
+	// 	{
+	// 		LOG_INF("Device joined the network. Configuring reporting...");
+	// 		//allow_autojoin = false;
+	// 		k_work_reschedule(&deep_sleep_work, K_SECONDS(30));
+	// 	}
+	// 	else
+	// 	{
+	// 		LOG_INF("Device  not joined the network. sleeping...");
+	// 		stop_after_fail = true;
+	// 	}
+	// }
 
 	if (sig == ZB_BDB_SIGNAL_DEVICE_REBOOT)
 	{
-		LOG_INF("Signal REBOOT");
+		LOG_INF("2_1allow_autojoin %d", allow_autojoin);
+		LOG_INF("Signal REBOOT status");
+		//bdb_start_top_level_commissioning(0);
+		if (status == RET_OK)
+		{
+			LOG_INF("Device rebooting in the network");
+
+			//k_work_reschedule(&deep_sleep_work, K_SECONDS(30));
+		}
+	}
+	else{
+		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
+	}
+
+	if (sig == ZB_BDB_SIGNAL_DEVICE_FIRST_START )
+	{
+		LOG_INF("2_2allow_autojoin %d", allow_autojoin);
+		LOG_INF("Signal ZB_BDB_SIGNAL_DEVICE_FIRST_START  status");
+		//bdb_start_top_level_commissioning(0);
+		if (status == RET_OK)
+		{
+			LOG_INF("Device first in the network");
+
+			//k_work_reschedule(&deep_sleep_work, K_SECONDS(30));
+		}
+	}
+	else{
+		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
+	}
+
+	if (sig == ZB_ZDO_SIGNAL_SKIP_STARTUP)
+	{
+
+		LOG_INF("Signal START_UP status");
 
 		if (status == RET_OK)
 		{
-			LOG_INF("Device rebooting the network");
-			k_work_reschedule(&deep_sleep_work, K_SECONDS(30));
 		}
 	}
+	// if (sig == ZB_NLME_STATUS_INDICATION)
+	// {
+	// 	zb_zdo_signal_nlme_status_indication_params_t *nlme =
+	// 		ZB_ZDO_SIGNAL_GET_PARAMS(sig_hndler,
+	// 								 zb_zdo_signal_nlme_status_indication_params_t);
 
-	ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
+	// 	//LOG_INF("NLME status indication: sig_status=%d nlme_status=%d", status, nlme ? nlme->nlme_status : -1);
+
+	//
+	// 	net_dead = true;
+
+	//
+	// 	k_timer_stop(&read_data_timer);
+	// 	allow_autojoin = false;
+
+	//
+	// 	pass_to_default = false;
+	// }
+
+	// if (allow_autojoin)
+	// {
+	// 	zb_ret_t err = zigbee_default_signal_handler(bufid);
+	// 	LOG_INF("3allow_autojoin %d", allow_autojoin);
+	// 	if (err != RET_OK)
+	// 	{
+	// 		LOG_INF("default_signal_handler ret=%d", err);
+	// 	}
+	// }
+
+	//ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
 
 	if (bufid)
 	{
@@ -90,17 +158,241 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	else if ((lastJoin == true) && (thisJoin == false))
 	{
 		LOG_INF("left network!");
-		LED_BLINK(K_NO_WAIT, K_NO_WAIT);
-
+		// LED_BLINK(K_NO_WAIT, K_NO_WAIT);
 	}
 	lastJoin = thisJoin;
+}*/
+
+/*void zboss_signal_handler(zb_bufid_t bufid)
+{
+	zb_zdo_app_signal_hdr_t *sig_hndler = NULL;
+	zb_zdo_app_signal_type_t sig = zb_get_app_signal(bufid, &sig_hndler);
+	zb_ret_t status = ZB_GET_APP_SIGNAL_STATUS(bufid);
+
+	bool call_default = true;
+
+	if (sig == ZB_BDB_SIGNAL_DEVICE_REBOOT)
+	{
+		LOG_INF("Signal REBOOT status=%d", status);
+		if (status == RET_OK)
+		{
+			LOG_INF("Device rebooting in the network");
+		}
+
+		call_default = false; // временно не даём default handler auto-rejoin policy
+	}
+	else if (sig == ZB_BDB_SIGNAL_DEVICE_FIRST_START)
+	{
+		LOG_INF("Signal DEVICE_FIRST_START status=%d", status);
+		if (status == RET_OK)
+		{
+			LOG_INF("Device first start");
+		}
+
+		call_default = false; // временно не даём default handler auto-steering policy
+	}
+	else if (sig == ZB_ZDO_SIGNAL_SKIP_STARTUP)
+	{
+		LOG_INF("Signal START_UP status=%d", status);
+		// пока только логируем
+	}
+
+	if (call_default)
+	{
+		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
+	}
+
+	if (bufid)
+	{
+		zb_buf_free(bufid);
+	}
+}*/
+
+static bool app_runtime_started;
+
+static void start_normal_app_runtime(const char *reason)
+{
+	if (app_runtime_started)
+	{
+		LOG_INF("Normal app runtime already started, reason=%s", reason);
+		return;
+	}
+
+	app_runtime_started = true;
+
+	LOG_INF("Start normal app runtime, reason=%s joined=%d",
+			reason, ZB_JOINED());
+
+	// LED_BLINK_STOP();
+	// set_led_off(&led);
+
+	k_timer_start(&read_data_timer,
+				  READ_DATA_INITIAL_DELAY,
+				  READ_DATA_TIMER_PERIOD);
+
+	k_work_reschedule(&deep_sleep_work, K_SECONDS(30));
+}
+
+void zboss_signal_handler(zb_bufid_t bufid)
+{
+	zb_zdo_app_signal_hdr_t *sig_hndler = NULL;
+	zb_zdo_app_signal_type_t sig = zb_get_app_signal(bufid, &sig_hndler);
+	zb_ret_t status = ZB_GET_APP_SIGNAL_STATUS(bufid);
+
+	bool call_default = true;
+
+	// LOG_INF("ZB signal: sig=%d status=%d joined=%d",
+	// 		sig, status, ZB_JOINED());
+
+	switch (sig)
+	{
+	case ZB_ZDO_SIGNAL_SKIP_STARTUP:
+		LOG_INF("ZB_ZDO_SIGNAL_SKIP_STARTUP: stack startup skipped/initialized path");
+		/*
+		 * Default handler здесь оставляем: он пишет "Zigbee stack initialized"
+		 * и делает базовую обработку startup.
+		 */
+		break;
+
+	case ZB_BDB_SIGNAL_DEVICE_FIRST_START:
+		LOG_INF("ZB_BDB_SIGNAL_DEVICE_FIRST_START: factory-new first start");
+		/*
+		 * Для диагностики НЕ пускаем default handler,
+		 * иначе zigbee_app_utils может сам стартовать network steering.
+		 */
+		call_default = false;
+		break;
+
+	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
+	{
+		LOG_INF("ZB_BDB_SIGNAL_DEVICE_REBOOT: status=%d joined=%d",
+				status, ZB_JOINED());
+
+		/*
+		 * После замены батарейки / power cycle у уже спаренного устройства
+		 * STEERING не придёт. Поэтому обычную runtime-логику запускаем здесь.
+		 */
+		if (ZB_JOINED())
+		{
+			start_normal_app_runtime("device_reboot_joined");
+		}
+		else
+		{
+			LOG_INF("DEVICE_REBOOT but not joined, do not start runtime");
+		}
+
+		/*
+		 * Для нашей политики не даём default handler'у запускать auto-rejoin/steering.
+		 */
+		call_default = false;
+		break;
+	}
+
+	case ZB_BDB_SIGNAL_STEERING:
+	{
+		LOG_INF("ZB_BDB_SIGNAL_STEERING: status=%d joined=%d",
+				status, ZB_JOINED());
+
+		if (status == RET_OK && ZB_JOINED())
+		{
+			LOG_INF("STEERING OK");
+			start_normal_app_runtime("steering");
+		}
+		else
+		{
+			LOG_INF("STEERING failed: status=%d joined=%d",
+					status, ZB_JOINED());
+		}
+
+		call_default = false;
+		break;
+	}
+
+	case ZB_ZDO_SIGNAL_LEAVE:
+		LOG_INF("ZB_ZDO_SIGNAL_LEAVE: device left network, status=%d joined=%d",
+				status, ZB_JOINED());
+		/*
+		 * Пока не зовём default, чтобы не получить auto-rejoin.
+		 */
+		call_default = false;
+		break;
+
+	case ZB_NLME_STATUS_INDICATION:
+	{
+		zb_zdo_signal_nlme_status_indication_params_t *nlme =
+			ZB_ZDO_SIGNAL_GET_PARAMS(sig_hndler,
+									 zb_zdo_signal_nlme_status_indication_params_t);
+
+		if (nlme)
+		{
+			LOG_INF("ZB_NLME_STATUS_INDICATION: sig_status=%d nwk_status=%d nwk_addr=0x%04x joined=%d",
+					status,
+					nlme->nlme_status.status,
+					nlme->nlme_status.network_addr,
+					ZB_JOINED());
+		}
+		else
+		{
+			LOG_INF("ZB_NLME_STATUS_INDICATION: sig_status=%d nlme=NULL joined=%d",
+					status,
+					ZB_JOINED());
+		}
+
+		/*
+		 * Для диагностики не зовём default, чтобы не провоцировать recovery-policy.
+		 */
+		call_default = false;
+		break;
+	}
+
+	case ZB_COMMON_SIGNAL_CAN_SLEEP:
+		call_default = false;
+		break;
+
+	case ZB_BDB_SIGNAL_STEERING_CANCELLED:
+		LOG_INF("ZB_BDB_SIGNAL_STEERING_CANCELLED: status=%d joined=%d",
+				status, ZB_JOINED());
+		call_default = false;
+		break;
+
+	case ZB_BDB_SIGNAL_WWAH_REJOIN_STARTED:
+		LOG_INF("ZB_BDB_SIGNAL_WWAH_REJOIN_STARTED: status=%d joined=%d",
+				status, ZB_JOINED());
+		call_default = false;
+		break;
+
+	default:
+		LOG_INF("Unhandled in app, pass to default: sig=%d status=%d joined=%d",
+				sig, status, ZB_JOINED());
+		break;
+	}
+
+	if (call_default)
+	{
+		zb_ret_t err = zigbee_default_signal_handler(bufid);
+		LOG_INF("zigbee_default_signal_handler ret=%d for sig=%d", err, sig);
+
+		if (err != RET_OK)
+		{
+			LOG_INF("default handler returned non-OK: %d", err);
+		}
+	}
+	else
+	{
+		// LOG_INF("default handler skipped for sig=%d", sig);
+	}
+
+	if (bufid)
+	{
+		zb_buf_free(bufid);
+	}
 }
 
 static int configure_gpio(void)
 {
 	int ret;
-	k_timer_init(&led_timer, led_timer_handler, NULL);
-	LED_BLINK(K_NO_WAIT, K_NO_WAIT);
+	// k_timer_init(&led_timer, led_timer_handler, NULL);
+	// LED_BLINK(K_NO_WAIT, K_NO_WAIT);
 	if (!gpio_is_ready_dt(&led))
 	{
 		LOG_ERR("GPIO device for led not ready");
@@ -124,6 +416,16 @@ static int configure_gpio(void)
 	return 0;
 }
 
+static void start_network_steering_cb(zb_uint8_t param)
+{
+	ARG_UNUSED(param);
+
+	LOG_INF("Manual network steering callback: joined=%d", ZB_JOINED());
+
+	zb_ret_t ret = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING);
+	LOG_INF("bdb_start_top_level_commissioning(STEERING) ret=%d", ret);
+}
+
 void button_handler(uint32_t button_state, uint32_t has_changed)
 {
 	LOG_INF("button_handler %d", button_state);
@@ -135,8 +437,15 @@ void button_handler(uint32_t button_state, uint32_t has_changed)
 	{
 		if (!was_factory_reset_done())
 		{
-			zb_ret_t ret = ZB_SCHEDULE_APP_CALLBACK(poll_control_checkin_cb, 0);
-			LOG_INF("manual check-in scheduled ret=%d", ret);
+
+			// zb_ret_t ret = ZB_SCHEDULE_APP_CALLBACK(poll_control_checkin_cb, 0);
+			// zb_ret_t ret = ZB_SCHEDULE_APP_CALLBACK(start_network_steering, 0);
+			// bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING);
+			LOG_INF("button released: schedule manual network steering");
+
+			zb_ret_t ret = ZB_SCHEDULE_APP_CALLBACK(start_network_steering_cb, 0);
+			LOG_INF("manual steering scheduled ret=%d", ret);
+			// LOG_INF("manual check-in scheduled ret=%d", ret);
 		}
 	}
 }
@@ -255,10 +564,10 @@ int main(void)
 	// initialize read data  timer
 	k_timer_init(&read_data_timer, read_data_cb, NULL);
 
+	// zb_set_rx_on_when_idle(ZB_FALSE);
 	zigbee_enable();
-
+	// zboss_start_no_autostart();
 	LOG_INF("Device started");
-
 	while (1)
 	{
 		k_sleep(K_FOREVER);
