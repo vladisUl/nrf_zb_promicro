@@ -96,18 +96,10 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	{
 	case ZB_ZDO_SIGNAL_SKIP_STARTUP:
 		LOG_INF("ZB_ZDO_SIGNAL_SKIP_STARTUP: stack startup skipped/initialized path");
-		/*
-		 * Default handler здесь оставляем: он пишет "Zigbee stack initialized"
-		 * и делает базовую обработку startup.
-		 */
 		break;
 
 	case ZB_BDB_SIGNAL_DEVICE_FIRST_START:
 		LOG_INF("ZB_BDB_SIGNAL_DEVICE_FIRST_START: factory-new first start");
-		/*
-		 * Для диагностики НЕ пускаем default handler,
-		 * иначе zigbee_app_utils может сам стартовать network steering.
-		 */
 		call_default = false;
 		break;
 
@@ -132,8 +124,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 
 	case ZB_BDB_SIGNAL_STEERING:
 	{
-		LOG_INF("ZB_BDB_SIGNAL_STEERING: status=%d joined=%d",
-				status, ZB_JOINED());
+		LOG_INF("ZB_BDB_SIGNAL_STEERING: status=%d joined=%d", status, ZB_JOINED());
 
 		if (status == RET_OK && ZB_JOINED())
 		{
@@ -142,8 +133,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		}
 		else
 		{
-			LOG_INF("STEERING failed: status=%d joined=%d",
-					status, ZB_JOINED());
+			LOG_INF("STEERING failed: status=%d joined=%d", status, ZB_JOINED());
 		}
 
 		call_default = false;
@@ -151,10 +141,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	}
 
 	case ZB_ZDO_SIGNAL_LEAVE:
-		LOG_INF("ZB_ZDO_SIGNAL_LEAVE: device left network, status=%d joined=%d",
-				status, ZB_JOINED());
-
-		// Пока не зовём default, чтобы не получить auto-rejoin.
+		LOG_INF("ZB_ZDO_SIGNAL_LEAVE: device left network, status=%d joined=%d", status, ZB_JOINED());
 		call_default = false;
 		break;
 
@@ -174,7 +161,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 
 			if (nlme->nlme_status.status == 9) // parent link failure
 			{
-				LOG_INF("Parent link failure: stop runtime and cancel joining/rejoin");
+				LOG_INF("Parent link failure: reboot to safe offline mode");
 				stop_normal_app_runtime("parent_link_failure");
 				k_work_reschedule(&reboot_work, K_MSEC(50));
 				// ZB_TRANSCEIVER_SET_RX_ON_OFF ( zb_get_rx_on_when_idle ());
@@ -184,21 +171,17 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		break;
 	}
 
-		// case ZB_COMMON_SIGNAL_CAN_SLEEP:
+		// case ZB_BDB_SIGNAL_STEERING_CANCELLED:
+		// 	LOG_INF("ZB_BDB_SIGNAL_STEERING_CANCELLED: status=%d joined=%d",
+		// 			status, ZB_JOINED());
 		// 	call_default = false;
 		// 	break;
 
-	case ZB_BDB_SIGNAL_STEERING_CANCELLED:
-		LOG_INF("ZB_BDB_SIGNAL_STEERING_CANCELLED: status=%d joined=%d",
-				status, ZB_JOINED());
-		call_default = false;
-		break;
-
-	case ZB_BDB_SIGNAL_WWAH_REJOIN_STARTED:
-		LOG_INF("ZB_BDB_SIGNAL_WWAH_REJOIN_STARTED: status=%d joined=%d",
-				status, ZB_JOINED());
-		call_default = false;
-		break;
+		// case ZB_BDB_SIGNAL_WWAH_REJOIN_STARTED:
+		// 	LOG_INF("ZB_BDB_SIGNAL_WWAH_REJOIN_STARTED: status=%d joined=%d",
+		// 			status, ZB_JOINED());
+		// 	call_default = false;
+		// 	break;
 
 	default:
 		if (sig != ZB_COMMON_SIGNAL_CAN_SLEEP)
@@ -225,7 +208,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	}
 	else
 	{
-		// LOG_INF("default handler skipped for sig=%d", sig);
+		LOG_INF("default handler skipped for sig=%d", sig);
 	}
 
 	if (bufid)
@@ -287,7 +270,7 @@ static void start_zigbee_from_button(void)
 void button_handler(uint32_t button_state, uint32_t has_changed)
 {
 	LOG_INF("button_handler %d", button_state);
-
+	zb_ret_t ret;
 	user_input_indicate();
 
 	check_factory_reset_button(button_state, has_changed);
@@ -295,20 +278,20 @@ void button_handler(uint32_t button_state, uint32_t has_changed)
 	{
 		if (!was_factory_reset_done())
 		{
-			LOG_INF("button released: schedule manual network steering");
+			LOG_INF("button released");
 			if (!zigbee_started)
 			{
 				start_zigbee_from_button();
 			}
 			else if (!ZB_JOINED())
 			{
-				zb_ret_t ret = ZB_SCHEDULE_APP_CALLBACK(start_network_steering_cb, 0);
+				ret = ZB_SCHEDULE_APP_CALLBACK(start_network_steering_cb, 0);
 				LOG_INF("manual steering scheduled ret=%d", ret);
 			}
 			else
 			{
-				LOG_INF("poll control checkin");
-				zb_ret_t ret = ZB_SCHEDULE_APP_CALLBACK(poll_control_checkin_cb, 0);
+				ret = ZB_SCHEDULE_APP_CALLBACK(poll_control_checkin_cb, 0);
+				LOG_INF("poll control checkin ret=%d", ret);
 			}
 		}
 	}
