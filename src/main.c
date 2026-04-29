@@ -23,11 +23,16 @@ static void send_attribute_report(zb_bufid_t bufid, zb_uint16_t cmd_id);
 static void enter_deep_sleep_work_handler(struct k_work *work);
 static void poll_control_checkin_cb(zb_uint8_t param);
 static void reboot_work_handler(struct k_work *work);
+static void zigbee_retry_work_handler(struct k_work *work);
+static void start_zigbee_v(void);
 static struct k_work_delayable reboot_work;
 
 K_WORK_DEFINE(read_data_work, read_data_handler);
 K_WORK_DELAYABLE_DEFINE(deep_sleep_work, enter_deep_sleep_work_handler);
 struct k_timer read_data_timer;
+
+static bool zigbee_started;
+static struct k_work_delayable zigbee_retry_work;
 
 LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
 
@@ -81,6 +86,14 @@ static void reboot_work_handler(struct k_work *work)
 	sys_reboot(SYS_REBOOT_WARM);
 }
 
+static void zigbee_retry_work_handler(struct k_work *work)
+{
+	if (!zigbee_started)
+	{
+		start_zigbee_v();
+	}
+}
+
 void zboss_signal_handler(zb_bufid_t bufid)
 {
 	zb_zdo_app_signal_hdr_t *sig_hndler = NULL;
@@ -110,12 +123,14 @@ void zboss_signal_handler(zb_bufid_t bufid)
 
 		if (status == RET_OK && ZB_JOINED())
 		{
+			k_work_cancel_delayable(&zigbee_retry_work);
 			start_normal_app_runtime("device_reboot_joined");
 		}
 		else
 		{
 			LOG_INF("DEVICE_REBOOT failed/not joined, enter offline state");
 			stop_normal_app_runtime("device_reboot_failed");
+			k_work_reschedule(&reboot_work, K_MSEC(50));
 		}
 
 		call_default = false;
@@ -253,9 +268,7 @@ static void start_network_steering_cb(zb_uint8_t param)
 	LOG_INF("bdb_start_top_level_commissioning(STEERING) ret=%d", ret);
 }
 
-static bool zigbee_started;
-
-static void start_zigbee_from_button(void)
+static void start_zigbee_v(void)
 {
 	if (zigbee_started)
 	{
@@ -271,7 +284,7 @@ void button_handler(uint32_t button_state, uint32_t has_changed)
 {
 	LOG_INF("button_handler %d", button_state);
 	zb_ret_t ret;
-	//user_input_indicate();
+	// user_input_indicate();
 
 	check_factory_reset_button(button_state, has_changed);
 	if (MY_BUTTON_MASK & has_changed & ~button_state)
@@ -281,7 +294,7 @@ void button_handler(uint32_t button_state, uint32_t has_changed)
 			LOG_INF("button released");
 			if (!zigbee_started)
 			{
-				start_zigbee_from_button();
+				start_zigbee_v();
 			}
 			else if (!ZB_JOINED())
 			{
@@ -377,6 +390,10 @@ int main(void)
 {
 	LOG_INF("Starting...");
 	k_work_init_delayable(&reboot_work, reboot_work_handler);
+	k_work_init_delayable(&zigbee_retry_work, zigbee_retry_work_handler);
+	LOG_INF("Offline mode: schedule Zigbee retry");
+	k_work_reschedule(&zigbee_retry_work, K_SECONDS(60));
+
 	int err;
 	if (!configure_gpio())
 	{
