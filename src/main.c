@@ -271,7 +271,7 @@ void button_handler(uint32_t button_state, uint32_t has_changed)
 {
 	LOG_INF("button_handler %d", button_state);
 	zb_ret_t ret;
-	user_input_indicate();
+	//user_input_indicate();
 
 	check_factory_reset_button(button_state, has_changed);
 	if (MY_BUTTON_MASK & has_changed & ~button_state)
