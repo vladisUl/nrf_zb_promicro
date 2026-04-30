@@ -24,7 +24,7 @@ static void enter_deep_sleep_work_handler(struct k_work *work);
 static void poll_control_checkin_cb(zb_uint8_t param);
 static void reboot_work_handler(struct k_work *work);
 static void zigbee_retry_work_handler(struct k_work *work);
-static void start_zigbee_v(void);
+static void start_zigbee_stack(void);
 static struct k_work_delayable reboot_work;
 
 K_WORK_DEFINE(read_data_work, read_data_handler);
@@ -56,12 +56,12 @@ static void start_normal_app_runtime(const char *reason)
 {
 	if (app_runtime_started)
 	{
-		LOG_INF("Normal app runtime already started, reason=%s", reason);
+		LOG_INF("app runtime started, reason=%s", reason);
 		return;
 	}
 
 	app_runtime_started = true;
-	LOG_INF("Start normal app runtime, reason=%s joined=%d", reason, ZB_JOINED());
+	LOG_INF("Start app runtime, reason=%s joined=%d", reason, ZB_JOINED());
 	LED_BLINK_STOP();
 	set_led_off(&led);
 	k_timer_start(&read_data_timer, READ_DATA_INITIAL_DELAY, READ_DATA_TIMER_PERIOD);
@@ -70,7 +70,7 @@ static void start_normal_app_runtime(const char *reason)
 
 static void stop_normal_app_runtime(const char *reason)
 {
-	LOG_INF("Stop normal app runtime, reason=%s joined=%d", reason, ZB_JOINED());
+	LOG_INF("Stop app runtime, reason=%s joined=%d", reason, ZB_JOINED());
 
 	app_runtime_started = false;
 	k_timer_stop(&read_data_timer);
@@ -81,7 +81,7 @@ static void stop_normal_app_runtime(const char *reason)
 static void reboot_work_handler(struct k_work *work)
 {
 	ARG_UNUSED(work);
-	LOG_INF("apply settings: reboot");
+	LOG_WRN("rebooting...");
 	k_msleep(100);
 	sys_reboot(SYS_REBOOT_WARM);
 }
@@ -90,7 +90,7 @@ static void zigbee_retry_work_handler(struct k_work *work)
 {
 	if (!zigbee_started)
 	{
-		start_zigbee_v();
+		start_zigbee_stack();
 	}
 }
 
@@ -102,23 +102,20 @@ void zboss_signal_handler(zb_bufid_t bufid)
 
 	bool call_default = true;
 
-	// LOG_INF("ZB signal: sig=%d status=%d joined=%d",
-	// 		sig, status, ZB_JOINED());
-
 	switch (sig)
 	{
 	case ZB_ZDO_SIGNAL_SKIP_STARTUP:
-		LOG_INF("ZB_ZDO_SIGNAL_SKIP_STARTUP: stack startup skipped/initialized path");
+		LOG_WRN("now ZB_ZDO_SIGNAL_SKIP_STARTUP");
 		break;
 
 	case ZB_BDB_SIGNAL_DEVICE_FIRST_START:
-		LOG_INF("ZB_BDB_SIGNAL_DEVICE_FIRST_START: factory-new first start");
+		LOG_WRN("now ZB_BDB_SIGNAL_DEVICE_FIRST_START");
 		call_default = false;
 		break;
 
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
 	{
-		LOG_INF("ZB_BDB_SIGNAL_DEVICE_REBOOT: status=%d joined=%d",
+		LOG_WRN("now ZB_BDB_SIGNAL_DEVICE_REBOOT: status=%d joined=%d",
 				status, ZB_JOINED());
 
 		if (status == RET_OK && ZB_JOINED())
@@ -128,18 +125,17 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		}
 		else
 		{
-			LOG_INF("DEVICE_REBOOT failed/not joined, enter offline state");
+			LOG_WRN("DEVICE_REBOOT failed/not joined, enter offline state");
 			stop_normal_app_runtime("device_reboot_failed");
 			k_work_reschedule(&reboot_work, K_MSEC(50));
 		}
-
 		call_default = false;
 		break;
 	}
 
 	case ZB_BDB_SIGNAL_STEERING:
 	{
-		LOG_INF("ZB_BDB_SIGNAL_STEERING: status=%d joined=%d", status, ZB_JOINED());
+		LOG_WRN("now ZB_BDB_SIGNAL_STEERING: status=%d joined=%d", status, ZB_JOINED());
 
 		if (status == RET_OK && ZB_JOINED())
 		{
@@ -148,7 +144,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		}
 		else
 		{
-			LOG_INF("STEERING failed: status=%d joined=%d", status, ZB_JOINED());
+			LOG_ERR("STEERING failed: status=%d joined=%d", status, ZB_JOINED());
 		}
 
 		call_default = false;
@@ -156,19 +152,18 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	}
 
 	case ZB_ZDO_SIGNAL_LEAVE:
-		LOG_INF("ZB_ZDO_SIGNAL_LEAVE: device left network, status=%d joined=%d", status, ZB_JOINED());
+		LOG_WRN("now ZB_ZDO_SIGNAL_LEAVE status=%d joined=%d", status, ZB_JOINED());
 		call_default = false;
 		break;
 
 	case ZB_NLME_STATUS_INDICATION:
 	{
 		zb_zdo_signal_nlme_status_indication_params_t *nlme =
-			ZB_ZDO_SIGNAL_GET_PARAMS(sig_hndler,
-									 zb_zdo_signal_nlme_status_indication_params_t);
+			ZB_ZDO_SIGNAL_GET_PARAMS(sig_hndler, zb_zdo_signal_nlme_status_indication_params_t);
 
 		if (nlme)
 		{
-			LOG_INF("ZB_NLME_STATUS_INDICATION: sig_status=%d nwk_status=%d nwk_addr=0x%04x joined=%d",
+			LOG_WRN("now ZB_NLME_STATUS_INDICATION: sig_status=%d nwk_status=%d nwk_addr=0x%04x joined=%d",
 					status,
 					nlme->nlme_status.status,
 					nlme->nlme_status.network_addr,
@@ -176,7 +171,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 
 			if (nlme->nlme_status.status == 9) // parent link failure
 			{
-				LOG_INF("Parent link failure: reboot to safe offline mode");
+				LOG_WRN("Parent link failure: reboot to safe offline mode");
 				stop_normal_app_runtime("parent_link_failure");
 				k_work_reschedule(&reboot_work, K_MSEC(50));
 				// ZB_TRANSCEIVER_SET_RX_ON_OFF ( zb_get_rx_on_when_idle ());
@@ -201,7 +196,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	default:
 		if (sig != ZB_COMMON_SIGNAL_CAN_SLEEP)
 		{
-			LOG_INF("Unhandled in app, pass to default: sig=%d status=%d joined=%d",
+			LOG_WRN("now DEFAULT pass: sig=%d status=%d joined=%d",
 					sig, status, ZB_JOINED());
 		}
 		break;
@@ -268,7 +263,7 @@ static void start_network_steering_cb(zb_uint8_t param)
 	LOG_INF("bdb_start_top_level_commissioning(STEERING) ret=%d", ret);
 }
 
-static void start_zigbee_v(void)
+static void start_zigbee_stack(void)
 {
 	if (zigbee_started)
 	{
@@ -276,7 +271,7 @@ static void start_zigbee_v(void)
 		return;
 	}
 	zigbee_started = true;
-	LOG_INF("enable Zigbee by button");
+	LOG_INF("now enable zigbee");
 	zigbee_enable();
 }
 
@@ -294,7 +289,7 @@ void button_handler(uint32_t button_state, uint32_t has_changed)
 			LOG_INF("button released");
 			if (!zigbee_started)
 			{
-				start_zigbee_v();
+				start_zigbee_stack();
 			}
 			else if (!ZB_JOINED())
 			{
@@ -391,7 +386,6 @@ int main(void)
 	LOG_INF("Starting...");
 	k_work_init_delayable(&reboot_work, reboot_work_handler);
 	k_work_init_delayable(&zigbee_retry_work, zigbee_retry_work_handler);
-	LOG_INF("Offline mode: schedule Zigbee retry");
 	k_work_reschedule(&zigbee_retry_work, K_SECONDS(60));
 
 	int err;
