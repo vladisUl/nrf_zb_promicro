@@ -8,7 +8,7 @@
 #include <zb_zcl_reporting.h>
 #include <zephyr/sys/reboot.h>
 #include <zigbee/zigbee_app_utils.h>
-//#include "zigbee_app_utils.h"
+// #include "zigbee_app_utils.h"
 #include <zigbee/zigbee_error_handler.h>
 #include <zb_nrf_platform.h>
 
@@ -61,7 +61,7 @@ static void start_normal_app_runtime(const char *reason)
 {
 	if (app_runtime_started)
 	{
-		LOG_INF("app runtime started, reason=%s", reason);
+		// LOG_INF("app runtime started, reason=%s", reason);
 		return;
 	}
 	zb_zdo_pim_set_long_poll_interval(300);
@@ -116,7 +116,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 
 		// case ZB_BDB_SIGNAL_DEVICE_FIRST_START:
 		// 	LOG_WRN("now ZB_BDB_SIGNAL_DEVICE_FIRST_START");
-		 //call_default = false;
+		// call_default = false;
 		// 	break;
 
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
@@ -135,19 +135,19 @@ void zboss_signal_handler(zb_bufid_t bufid)
 			stop_normal_app_runtime(ERR_REBOOT);
 			k_work_reschedule(&reboot_work, K_MSEC(50));
 		}
-		call_default = false;
+		// call_default = false;
 		break;
 	}
 
-	case ZB_BDB_SIGNAL_STEERING:
+	/*case ZB_BDB_SIGNAL_STEERING:
 	{
 		LOG_WRN("now ZB_BDB_SIGNAL_STEERING: status=%d joined=%d", status, ZB_JOINED());
 
-		if (status == RET_OK && ZB_JOINED())
-		//if (status == RET_OK)
+		//if (status == RET_OK && ZB_JOINED())
+		if (status == RET_OK)
 		{
 			LOG_INF("STEERING OK");
-			start_normal_app_runtime("steering");
+			// start_normal_app_runtime("steering");
 		}
 		else
 		{
@@ -156,9 +156,9 @@ void zboss_signal_handler(zb_bufid_t bufid)
 			k_work_reschedule(&reboot_work, K_MSEC(50));
 		}
 
-		//call_default = false;
+		// call_default = false;
 		break;
-	}
+	}*/
 
 	case ZB_ZDO_SIGNAL_LEAVE:
 		if (status == RET_OK)
@@ -238,19 +238,24 @@ void zboss_signal_handler(zb_bufid_t bufid)
 				LOG_INF("default handler skipped for sig=%d", sig);
 			}*/
 
-	// default:
-	// 	break;
+		// default:
+		// 	break;
 	}
 
 	if (call_default)
 	{
-		//LOG_WRN("default handler");
+		// LOG_WRN("default handler");
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
 	}
 
 	if (bufid)
 	{
 		zb_buf_free(bufid);
+	}
+
+	if (ZB_JOINED())
+	{
+		start_normal_app_runtime("steering");
 	}
 }
 
@@ -300,7 +305,7 @@ static void start_zigbee_stack(void)
 	zigbee_started = true;
 	LOG_INF("now enable zigbee");
 	zigbee_enable();
-	k_sleep(K_MSEC(100));
+	// k_sleep(K_MSEC(100));
 }
 
 void button_handler(uint32_t button_state, uint32_t has_changed)
@@ -331,11 +336,13 @@ void button_handler(uint32_t button_state, uint32_t has_changed)
 			//}
 			if (!ZB_JOINED()) // first
 			{
-				start_zigbee_stack();
+				LOG_WRN("SRART_HERE");
+				//start_zigbee_stack();
 			}
-			else if (!zigbee_started)
+			//else if (!zigbee_started)
+			else if (zigbee_started)
 			{
-				start_zigbee_stack();
+				//start_zigbee_stack();
 			}
 			else
 			{
@@ -427,8 +434,8 @@ int main(void)
 {
 	LOG_INF("Starting...");
 	k_work_init_delayable(&reboot_work, reboot_work_handler);
-	k_work_init_delayable(&zigbee_retry_work, zigbee_retry_work_handler);
-	k_work_reschedule(&zigbee_retry_work, K_SECONDS(60));
+	// k_work_init_delayable(&zigbee_retry_work, zigbee_retry_work_handler);
+	// k_work_reschedule(&zigbee_retry_work, K_SECONDS(60));
 
 	int err;
 	if (!configure_gpio())
@@ -466,7 +473,7 @@ int main(void)
 	k_timer_init(&read_data_timer, read_data_cb, NULL);
 
 	// zb_set_rx_on_when_idle(ZB_FALSE);
-	//zigbee_enable();
+	zigbee_enable();
 	LOG_INF("Device started");
 	while (1)
 	{
