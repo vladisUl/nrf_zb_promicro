@@ -15,6 +15,7 @@ target_sources(app PRIVATE
   src/main.c
   src/zephyr_drivers.c
   src/zb_zcl_struct.c
+  #sdk/zigbee_app_utils.c
 )
 
 target_include_directories(app PRIVATE include)
