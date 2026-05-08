@@ -253,7 +253,7 @@ void button_handler(uint32_t button_state, uint32_t has_changed)
 		if (!was_factory_reset_done())
 		{
 			LOG_INF("button released");
-			if (zigbee_is_zboss_thread_suspended())
+			if (zigbee_is_zboss_thread_suspended() && zigbee_is_stack_started())
 			{
 				LOG_WRN("zigbee_debug_resume_zboss_thread");
 				zigbee_debug_resume_zboss_thread();
@@ -345,7 +345,7 @@ static void read_data_handler(struct k_work *work)
 		ZB_FALSE);
 
 	LOG_INF("Data t = %dC h = %d p = %dhPa V = %dV", temp, hum, press, volt_cr);
-	// zb_buf_get_out_delayed_ext(send_attribute_report, 0, 0);
+	zb_buf_get_out_delayed_ext(send_attribute_report, 0, 0);
 }
 
 int main(void)
