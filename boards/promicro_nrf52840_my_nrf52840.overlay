@@ -1,3 +1,4 @@
+#include <nrf52840_partitions.dtsi>
 / {
     aliases {
         sw0 = &user_button;
