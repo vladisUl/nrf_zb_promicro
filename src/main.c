@@ -14,6 +14,7 @@
 
 #include "zephyr_drivers.h"
 #include "zb_zcl_struct.h"
+#include <zb_macll.h>
 
 void zboss_signal_handler(zb_bufid_t bufid);
 static int configure_gpio(void);
@@ -25,6 +26,7 @@ static void enter_deep_sleep_work_handler(struct k_work *work);
 static void poll_control_checkin_cb(zb_uint8_t param);
 static void reboot_work_handler(struct k_work *work);
 static void start_zigbee_stack(void);
+static void zboss_recovery_join_cb(zb_uint8_t param);
 static struct k_work_delayable zboss_recovery_work;
 static struct k_work_delayable reboot_work;
 
@@ -33,7 +35,6 @@ K_WORK_DELAYABLE_DEFINE(deep_sleep_work, enter_deep_sleep_work_handler);
 struct k_timer read_data_timer;
 
 static bool zigbee_started;
-static bool zboss_app_suspended;
 static bool app_runtime_started;
 
 #define ERR_REBOOT 1
@@ -45,7 +46,7 @@ LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
 static void enter_deep_sleep_work_handler(struct k_work *work)
 {
 	LOG_INF("Configuration window closed. Setting long poll to 10 minutes.");
-	zb_zdo_pim_set_long_poll_interval(LONG_POLL_INTERVAL);
+	zb_zdo_pim_set_long_poll_interval(600000);
 }
 
 static void poll_control_checkin_cb(zb_uint8_t param)
@@ -89,27 +90,32 @@ static void reboot_work_handler(struct k_work *work)
 	sys_reboot(SYS_REBOOT_WARM);
 }
 
-static void app_zboss_suspend(const char *reason)
+static void zboss_recovery_join_cb(zb_uint8_t param)
 {
-	LOG_WRN("Suspend ZBOSS, reason=%s", reason);
-	if (!zigbee_is_zboss_thread_suspended())
-	{
-		zigbee_debug_suspend_zboss_thread();
-	}
-	zboss_app_suspended = true;
-}
+	ZVUNUSED(param);
 
-static void app_zboss_resume(const char *reason)
-{
-	LOG_WRN("Resume ZBOSS, reason=%s", reason);
-	zigbee_debug_resume_zboss_thread();
-	zboss_app_suspended = false;
+	LOG_WRN("ZBOSS recovery: start network steering");
+
+	if (!bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING))
+	{
+		LOG_WRN("Recovery network steering rejected");
+		k_work_reschedule(&zboss_recovery_work, K_SECONDS(60));
+	}
 }
 
 static void zboss_recovery_work_handler(struct k_work *work)
 {
+	ARG_UNUSED(work);
+
 	LOG_WRN("ZBOSS recovery timer fired");
-	app_zboss_resume("recovery_timer");
+
+	zb_ret_t ret = ZB_SCHEDULE_APP_CALLBACK(zboss_recovery_join_cb, 0);
+
+	if (ret != RET_OK)
+	{
+		LOG_WRN("Failed to schedule ZBOSS recovery callback: %d", ret);
+		k_work_reschedule(&zboss_recovery_work, K_SECONDS(60));
+	}
 }
 
 void zboss_signal_handler(zb_bufid_t bufid)
@@ -135,6 +141,9 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		else
 		{
 			LOG_WRN("DEVICE_REBOOT failed/not joined, enter offline state");
+			zb_macll_trans_set_rx_on_off(zb_get_rx_on_when_idle());
+			k_work_reschedule(&zboss_recovery_work, K_SECONDS(60));
+
 			stop_normal_app_runtime(ERR_REBOOT);
 		}
 		call_default = false;
@@ -143,16 +152,24 @@ void zboss_signal_handler(zb_bufid_t bufid)
 
 	case ZB_BDB_SIGNAL_STEERING:
 	{
-		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
-		if (status == RET_OK)
+		LOG_WRN("ZB_BDB_SIGNAL_STEERING: status=%d joined=%d",
+				status, ZB_JOINED());
+
+		if (status == RET_OK && ZB_JOINED())
 		{
+			LOG_INF("Recovery successful");
 			start_normal_app_runtime("steering");
 		}
 		else
 		{
-			LOG_ERR("STEERING failed: status=%d joined=%d", status, ZB_JOINED());
+			LOG_WRN("Recovery failed, sleep 60 seconds");
+
+			zb_macll_trans_set_rx_on_off(zb_get_rx_on_when_idle());
+
 			stop_normal_app_runtime(ERR_STEERING);
+			k_work_reschedule(&zboss_recovery_work, K_SECONDS(60));
 		}
+
 		call_default = false;
 		break;
 	}
@@ -165,31 +182,6 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		}
 		call_default = false;
 		break;
-
-	case ZB_NLME_STATUS_INDICATION:
-	{
-		zb_zdo_signal_nlme_status_indication_params_t *nlme =
-			ZB_ZDO_SIGNAL_GET_PARAMS(sig_hndler, zb_zdo_signal_nlme_status_indication_params_t);
-
-		if (nlme)
-		{
-			LOG_WRN("now ZB_NLME_STATUS_INDICATION: sig_status=%d nwk_status=%d nwk_addr=0x%04x joined=%d",
-					status,
-					nlme->nlme_status.status,
-					nlme->nlme_status.network_addr,
-					ZB_JOINED());
-
-			if (nlme->nlme_status.status == 9) // parent link failure
-			{
-				LOG_WRN("Parent link failure: suspend_zboss_thread");
-				k_work_reschedule(&zboss_recovery_work, K_SECONDS(60));
-				app_zboss_suspend("parent_link_failure");
-				LOG_WRN("Continue...");
-			}
-		}
-		call_default = false;
-		break;
-	}
 	}
 
 	if (call_default)
@@ -253,12 +245,7 @@ void button_handler(uint32_t button_state, uint32_t has_changed)
 		if (!was_factory_reset_done())
 		{
 			LOG_INF("button released");
-			if (zigbee_is_zboss_thread_suspended() && zigbee_is_stack_started())
-			{
-				LOG_WRN("zigbee_debug_resume_zboss_thread");
-				zigbee_debug_resume_zboss_thread();
-			}
-			else if (!zigbee_started)
+			if (!zigbee_started)
 			{
 				start_zigbee_stack();
 			}
@@ -353,7 +340,7 @@ int main(void)
 	LOG_INF("Starting...");
 	k_work_init_delayable(&reboot_work, reboot_work_handler);
 	k_work_init_delayable(&zboss_recovery_work, zboss_recovery_work_handler);
-	
+
 	int err;
 	if (!configure_gpio())
 	{
@@ -377,7 +364,7 @@ int main(void)
 	register_factory_reset_button(MY_BUTTON_MASK);
 	zigbee_erase_persistent_storage(ERASE_PERSISTENT_CONFIG);
 	zb_set_ed_timeout(ED_AGING_TIMEOUT_64MIN);
-	zb_set_keepalive_timeout(ZB_MILLISECONDS_TO_BEACON_INTERVAL(3600 * 1000));
+	zb_set_keepalive_timeout(ZB_MILLISECONDS_TO_BEACON_INTERVAL(3600 * 1000)); //!!!!!!!!
 
 	// configure for lowest power
 	zigbee_configure_sleepy_behavior(true);
