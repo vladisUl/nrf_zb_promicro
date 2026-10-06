@@ -1,8 +1,8 @@
 # Zigbee Temperature, Humidity, and Pressure Sensor on ProMicro nRF52840 + BME280
 
-This project is a Zigbee device based on the popular **ProMicro nRF52840** board and the **BME280** sensor.
+This project is a Zigbee device based on the **ProMicro nRF52840** board and the **BME280** sensor.
 
-The device is intended to operate as a standalone Zigbee sensor and reports the following values to the network:
+The device operates as a standalone Zigbee sensor and reports:
 
 - temperature
 - humidity
@@ -17,16 +17,14 @@ The project is built on **nRF Connect SDK**, **Zephyr**, and **Zigbee R23**.
 
 The hardware platform used in this project is the **ProMicro nRF52840** board.
 
-One important feature of this board is its built-in **Bootloader**, which allows firmware to be uploaded without using an SWD debugger.
+The board has a built-in nRF52 UF2 bootloader, so firmware can be uploaded without an SWD debugger.
 
 ### Entering Bootloader Mode
 
-To enter bootloader mode:
-
 - short **RST** to **GND** twice within **0.5 seconds**
-- then connect the board to the computer over USB
-- a storage device named **Nice! Nano** will appear
-- copy the firmware file in **`.uf2`** format to this drive
+- connect the board to the computer over USB
+- a storage device named **Nice! Nano** appears
+- copy the generated **`.uf2`** file to this drive
 
 ### Board Schematic
 
@@ -40,144 +38,141 @@ To enter bootloader mode:
 
 ### BME280 Sensor Support
 
-The project reads data from the **BME280** using standard **Zephyr** drivers.  
-The following values are measured:
-
-- temperature
-- humidity
-- pressure
-
-The sensor is initialized through Devicetree and accessed through the standard Zephyr sensor subsystem.
+The project reads the BME280 through the standard Zephyr sensor subsystem and reports temperature, humidity, and pressure.
 
 ### Supply Voltage Measurement
 
-Supply voltage is measured using the **ADC**.  
-Based on the measured voltage, the firmware calculates an estimated battery level and publishes it through the Zigbee **Power Configuration cluster**.
+Supply voltage is measured using the ADC. The firmware calculates an estimated battery level and publishes it through the Zigbee **Power Configuration cluster**.
 
 ### Poll Control Cluster
 
-The project includes the **Poll Control cluster**.
-
-It is used to wake the device with a short button press. This is useful when the device needs to be configured after installation and after joining a Zigbee network.
+The project includes the **Poll Control cluster**. A short button press wakes the device so it can be configured after installation or after joining a Zigbee network.
 
 ### Low Power Operation
 
-The project is designed for battery-powered use and includes several power-saving mechanisms:
+The project includes:
 
 - Zigbee sleepy behavior
-- placing the BME280 into suspend mode between measurements
-- powering down unused RAM blocks
+- BME280 suspend mode between measurements
+- unused RAM power-down
 - infrequent wakeups for data transmission
 
 ---
 
-## Development and Debugging
+## Zigbee Flash Layout
 
-During development, the same board was used, but with the following signals exposed:
+With Partition Manager disabled, the project uses the current Zigbee add-on Devicetree layout:
 
-- SWD
-- SCL
-- GND
-- VDD
+`boards/promicro_nrf52840_my_nrf52840.overlay`
 
-This allowed:
+includes:
 
-- direct firmware flashing
-- debugging
-- erasing the bootloader when needed
-- working with runtime logs
+```dts
+#include <nrf52840_partitions.dtsi>
+```
 
----
+For nRF52840 this provides the Zigbee storage areas in Devicetree, including:
 
-## Build Details for the Built-In Bootloader
+- `storage_partition`
+- `zboss_nvram`
+- `zboss_product_config`
 
-Because this board uses a built-in bootloader, the final firmware must be built **not from address `0x0000`**, but from an offset compatible with the bootloader.
-
-In this project, that is handled through **Partition Manager** and a static memory layout.
-
-The following file is used for that purpose:
-
-`/pm_static/pm_static.yml`
-
-It must be copied to the project root under the name:
-
-`pm_static.yml`
-
-If this file is not present, the application will be built from the beginning of flash memory. That is convenient for SWD flashing, but it is not suitable for uploading through the board’s built-in bootloader.
+The old `pm_static.yml` workflow is no longer used.
 
 ---
 
-## Preparing a Build for Bootloader Upload
+## Development / SWD Build
 
-To generate a firmware file suitable for uploading through the built-in bootloader, follow these steps.
+For normal development and direct SWD/J-Link flashing:
 
-### 1. Disable Logging
+- make sure there is **no `uf2.conf` in the project root**
+- use the normal build configuration
+- run a **pristine build** after removing `uf2.conf`
 
-In `prj.conf`, disable logging or reduce it to a minimum.
+The application is then linked for direct flashing from address `0x0000`.
 
-### 2. Add the Static Memory Layout
+---
 
-Copy the file:
+## Built-In Bootloader / UF2 Build
 
-`/pm_static/pm_static.yml`
+The repository contains:
 
-to the project root as:
+`uf2/uf2.conf`
 
-`pm_static.yml`
+To enable the bootloader build, copy it to the project root:
 
-### 3. Create a Separate Build Configuration
+```text
+uf2/uf2.conf -> uf2.conf
+```
 
-Use the following parameters:
+Then run a **pristine build**.
 
-**Extra CMake arguments:** `-DGEN_UF2=ON`  
-**Build mode:** `no sysbuild`
+The root `uf2.conf` enables:
 
-### 4. Build the Project
+```conf
+CONFIG_USE_DT_CODE_PARTITION=n
+CONFIG_FLASH_LOAD_OFFSET=0x1000
+CONFIG_FLASH_LOAD_SIZE=0xF4000
+CONFIG_BUILD_OUTPUT_UF2=y
+```
 
-After a successful build, the following file will be generated in:
+This does three things:
 
-`build/zephyr/`
+1. links the application at `0x1000`, leaving `0x0000..0x0FFF` for the resident bootloader;
+2. limits the application region so it does not overlap the Zigbee storage area starting at `0xF5000`;
+3. enables Zephyr's built-in UF2 generator.
 
-File:
+No extra CMake argument such as `-DGEN_UF2=ON` is required, and no project-local `uf2conv.py` is used.
 
-`zephyr.uf2`
+After a successful build, `zephyr.uf2` is generated by Zephyr next to the other application build outputs.
+
+Before flashing a newly changed memory-layout configuration, verify that `zephyr.hex` starts at address `0x1000`.
+
+---
+
+## Switching Back to SWD Build
+
+Delete the root:
+
+`uf2.conf`
+
+and perform a **pristine build**.
+
+The template remains safely stored as:
+
+`uf2/uf2.conf`
+
+So the same build configuration can be used for both modes; the presence of the root `uf2.conf` is the only switch.
 
 ---
 
 ## Uploading Firmware to the Board
 
 1. Short **RST** to **GND** twice within **0.5 seconds**
-2. Connect the board to the computer over USB
-3. Wait until the **Nice! Nano** storage device appears
-4. Copy `zephyr.uf2` to that drive
+2. Connect the board over USB
+3. Wait for the **Nice! Nano** drive
+4. Copy `zephyr.uf2` to the drive
 
-After the copy operation finishes, the board will reboot and start the new firmware.
+The board reboots into the new firmware after the copy completes.
 
 ---
 
-## Typical Usage During Development
+## Development and Debugging
 
-### Debug Build
+During development the same board can be used with:
 
-Used for SWD flashing and debugging:
+- SWD
+- SCL
+- GND
+- VDD
 
-- without `pm_static.yml` in the project root
-- the application is built for direct flashing into memory
-- convenient for testing and debugging
-
-### Build for the Built-In Bootloader
-
-Used for normal operation without SWD access:
-
-- with `pm_static.yml` in the project root
-- with `uf2` generation enabled
-- uploaded through the built-in bootloader
+This allows direct firmware flashing, debugging, bootloader recovery, and runtime logging.
 
 ---
 
 ## Zigbee Functionality
 
-The device uses a Zigbee endpoint with the following main clusters:
+The device uses a Zigbee endpoint with these main clusters:
 
 - Basic
 - Identify
@@ -202,5 +197,6 @@ This project can be used as a base for:
 
 ## Note
 
-This project is specifically designed for the **ProMicro nRF52840** board with its built-in bootloader.  
-If you use a different board, a different bootloader, or a different flashing method, the memory layout and build settings may need to be adjusted.
+This project is specifically configured for the **ProMicro nRF52840** board with its resident UF2 bootloader.
+
+If another board, bootloader, or memory layout is used, the `0x1000` application offset and flash limits must be reviewed before flashing.
