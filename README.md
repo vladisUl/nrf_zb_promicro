@@ -11,6 +11,11 @@ The device operates as a standalone Zigbee sensor and reports:
 
 The project is built on **nRF Connect SDK**, **Zephyr**, and **Zigbee R23**.
 
+## SDK Version
+
+This repository is currently developed and tested with **nRF Connect SDK v3.4.0**.
+Use **NCS v3.4.0 or newer** when building the project. The flash layout and UF2 workflow described below rely on the current Devicetree-based memory layout used by recent NCS/Zephyr versions.
+
 ---
 
 ## Hardware Platform
